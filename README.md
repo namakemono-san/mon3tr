@@ -4,7 +4,7 @@ A general-purpose and powerful Discord bot with osu! features related to mapping
 inspired by [AxerBot](https://github.com/Hiviexd/AxerBot).
 
 > [!CAUTION]
-> This program was created for educational purposes. Please note that continuous maintenance will not be provided.
+> This program was created for educational purposes. Please note that continuous maintenance will not be provided.  
 > Additionally, running this on a self-hosted server is not recommended as it may place a heavy load on osumod.
 
 ## Features
