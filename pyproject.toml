@@ -1,0 +1,28 @@
+[project]
+name = "mon3tr"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "namakemono-san",email = "me@yuzunix.dev"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.13"
+dependencies = [
+    "discord-py (>=2.6.4,<3.0.0)",
+    "jishaku (>=2.6.3,<3.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "colorama (>=0.4.6,<0.5.0)",
+    "tabulate (>=0.9.0,<0.10.0)",
+    "yt-dlp (>=2025.1.1)",
+    "boto3 (>=1.35.0)",
+    "aiosqlite (>=0.20.0)",
+    "numpy (>=2.5.2,<3.0.0)"
+]
+
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
