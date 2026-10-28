@@ -1,4 +1,3 @@
-from typing import Optional
 
 import discord
 
@@ -15,7 +14,7 @@ class DetailNoticeView(discord.ui.LayoutView):
         self,
         tag: str,
         lines: list,
-        thumbnail: Optional[str] = None,
+        thumbnail: str | None = None,
     ):
         super().__init__(timeout=None)
 
@@ -50,3 +49,29 @@ class NoticeView(discord.ui.LayoutView):
                 accent_color=color,
             )
         )
+
+
+class FileResultView(discord.ui.LayoutView):
+    def __init__(
+        self,
+        filename: str,
+        caption: str,
+        url: str | None = None,
+        gallery: bool = False,
+    ):
+        super().__init__(timeout=None)
+
+        source = url or f"attachment://{filename}"
+        footer = discord.ui.TextDisplay(f"-# {caption}")
+        if gallery:
+            items = [
+                discord.ui.MediaGallery(discord.MediaGalleryItem(source)),
+                discord.ui.Separator(),
+                footer,
+            ]
+        elif url:
+            items = [discord.ui.TextDisplay(f"{url}\n-# {caption}")]
+        else:
+            items = [discord.ui.File(source), discord.ui.Separator(), footer]
+
+        self.add_item(discord.ui.Container(*items))

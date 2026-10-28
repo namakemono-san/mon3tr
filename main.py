@@ -1,111 +1,94 @@
 import logging
-import os
-from typing import TYPE_CHECKING, Type
+import logging.handlers
+import shutil
+import sys
+from typing import TYPE_CHECKING
 
 import discord
-from colorama import init
-from discord.ext import commands, tasks
-from dotenv import load_dotenv
+from discord.ext import commands
 
-from src.console import ColoredFormatter
+from src.config import DATA_DIR, LOG_DIR, ROOT, ConfigError, Settings, get_settings
 from src.utils.db import Database
 
 if TYPE_CHECKING:
     from src.exts._common import Cog
 
+EXTENSIONS_DIR = ROOT / "src" / "exts"
+
+logger = logging.getLogger("Mon3tr")
+
 
 class Mon3trBot(commands.Bot):
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings) -> None:
+        intents = discord.Intents.default()
+        intents.message_content = True  # prefix commands
+        intents.members = True  # mention routing for osumod notifications
+
         super().__init__(
             command_prefix="m.",
             strip_after_prefix=True,
             case_insensitive=True,
             allowed_mentions=discord.AllowedMentions.none(),
-            intents=discord.Intents.all(),
+            intents=intents,
             help_command=None,
-            owner_id=int(os.environ["OWNER_ID"]),
+            owner_id=settings.owner_id,
         )
-
-        self.version = "1.0.0"
-
-        self.prev_update = {}
-
-        self.logger = logging.getLogger("Mon3tr")
+        self.settings = settings
         self.db = Database()
 
-    async def on_ready(self) -> None:
-        self.logger.info("Mon3tr is ready.")
-
     async def setup_hook(self) -> None:
-        await self.db.connect("data/mon3tr.db")
+        await self.db.connect(DATA_DIR / "mon3tr.db")
 
         await self.load_extension("jishaku")
+        for path in sorted(EXTENSIONS_DIR.glob("*.py")):
+            if not path.name.startswith("_"):
+                await self.load_extension(f"src.exts.{path.stem}")
 
-        for file in os.listdir("src/exts/"):
-            if not file.endswith(".py") or file.startswith("_"):
-                continue
-            name = file[:-3]
-            await self.load_extension(f"src.exts.{name}")
+        synced = await self.tree.sync()
+        logger.info("synced %d application command(s)", len(synced))
 
-        await self.tree.sync()
-
-        self.watch_files.start()
-
-    @tasks.loop(seconds=1)
-    async def watch_files(self) -> None:
-        try:
-            for file in os.listdir("src/exts/"):
-                if not file.endswith(".py") or file.startswith("_"):
-                    continue
-                update_time = os.path.getmtime(f"src/exts/{file}")
-                if update_time != self.prev_update.get(file):
-                    if self.prev_update.get(file) is not None:
-                        self.logger.info("Reloading %s by auto reloading", file)
-                        try:
-                            await self.reload_extension(f"src.exts.{file[:-3]}")
-                        except commands.errors.ExtensionNotLoaded:
-                            await self.load_extension(f"src.exts.{file[:-3]}")
-                    self.prev_update[file] = update_time
-        except Exception as e:
-            self.logger.exception(e)
+    async def on_ready(self) -> None:
+        logger.info("logged in as %s (%s)", self.user, self.user.id)
 
     async def close(self) -> None:
         await super().close()
         await self.db.close()
 
-    def run(self) -> None:
-        self.logger.info("Starting Mon3tr...")
-        super().run(os.environ["DISCORD_TOKEN"], log_handler=None)
-
-    async def load_cog(self, cog: Type["Cog"]) -> None:
-        self.logger.info("Loading cog: %s", cog)
-        await self.add_cog(cog(self), override=True)
+    async def load_cog(self, cog: type["Cog"]) -> None:
+        await self.add_cog(cog(self))
+        logger.info("loaded cog %s", cog.__name__)
 
 
 def setup_logging() -> None:
-    file_handler = logging.FileHandler(
-        filename="mon3tr.log", encoding="utf-8", mode="w"
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
-    )
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(ColoredFormatter(True))
+    discord.utils.setup_logging(level=logging.INFO)
 
-    logging.root.setLevel(logging.DEBUG)
-    logging.root.addHandler(console_handler)
-    logging.root.addHandler(file_handler)
+    LOG_DIR.mkdir(exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        LOG_DIR / "mon3tr.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setFormatter(logging.Formatter(
+        "[{asctime}] [{levelname:<8}] {name}: {message}", "%Y-%m-%d %H:%M:%S", style="{"
+    ))
+    logging.getLogger().addHandler(file_handler)
+
+    # Transfer logs include local paths, object keys and signed requests.
+    for name in ("boto3", "botocore", "s3transfer"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def main() -> None:
-    init(autoreset=True)
-    load_dotenv()
-    bot = Mon3trBot()
-
     setup_logging()
-    bot.run()
+    try:
+        settings = get_settings()
+    except ConfigError as e:
+        logger.critical("%s (see .env.example)", e)
+        sys.exit(1)
+
+    for tool in (settings.ffmpeg_path, settings.ffprobe_path):
+        if shutil.which(tool) is None:
+            logger.warning("%s not found; download and audio tools will fail", tool)
+
+    Mon3trBot(settings).run(settings.discord_token, log_handler=None)
 
 
 if __name__ == "__main__":
