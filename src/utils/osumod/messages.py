@@ -53,6 +53,10 @@ def _emoji(status: str) -> str:
     return STATUS_EMOJI.get(status, DEFAULT_STATUS_EMOJI)
 
 
+def _relative_time() -> str:
+    return f"<t:{int(datetime.now(UTC).timestamp())}:R>"
+
+
 def _status_text(status: str) -> str:
     return f"{_emoji(status)} {STATUS_LABELS.get(status, status)}"
 
@@ -60,10 +64,9 @@ def _status_text(status: str) -> str:
 def queue_event_embed(event: dict) -> discord.Embed:
     title, color = QUEUE_EVENT_TITLES[event["kind"]]
     return discord.Embed(
-        title=title.format(username=event["username"]),
+        title=f"{title.format(username=event['username'])} ({_relative_time()})",
         url=profile_url(event["username"]),
         color=color,
-        timestamp=datetime.now(UTC),
     )
 
 
@@ -79,10 +82,9 @@ def request_change_embed(change: dict, bn_username: str) -> discord.Embed:
         status_value = f"{_status_text(old_status)} → {_status_text(new_status)}"
 
     embed = discord.Embed(
-        title=title,
+        title=f"{title} ({_relative_time()})",
         url=profile_url(bn_username),
         color=STATUS_COLORS.get(new_status, DEFAULT_STATUS_COLOR),
-        timestamp=datetime.now(UTC),
     )
     embed.add_field(
         name=f"Beatmapset by {req.get('creator') or 'Unknown'}"[:256],
@@ -96,7 +98,7 @@ def request_change_embed(change: dict, bn_username: str) -> discord.Embed:
         embed.add_field(name="Feedback", value=feedback[:1024], inline=False)
     if cover := req.get("coverUrl"):
         embed.set_image(url=cover)
-    embed.set_footer(text=f"BN: {bn_username}")
+    embed.set_footer(text=f"BN by {bn_username} • {datetime.now(UTC):%Y-%m-%d %H:%M} UTC")
     return embed
 
 
